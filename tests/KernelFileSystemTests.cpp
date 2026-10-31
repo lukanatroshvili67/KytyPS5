@@ -2096,12 +2096,15 @@ void TestNetCtlHostIpv4() {
 }
 #endif
 
+// Recording Mode keeps each instantiation distinct; identical bodies can be folded to one
+// address by the linker (lld-link /OPT:ICF), and NP rejects a callback registered twice.
 template <int Mode>
 void KYTY_SYSV_ABI RecordNpState(int user_id, uint32_t state, void* arg) {
-  auto& event = *static_cast<std::array<int, 3>*>(arg);
+  auto& event = *static_cast<std::array<int, 4>*>(arg);
   ++event[0];
   event[1] = user_id;
   event[2] = static_cast<int>(state);
+  event[3] = Mode;
 }
 
 void TestNpEmulation() {
@@ -2152,7 +2155,7 @@ void TestNpEmulation() {
   options.printf_direction = Config::LogDirection::Silent;
   Check(!options.network_connected && !options.psn_emulation_enabled,
         "host networking and PSN emulation both require explicit opt-in");
-  static std::array<std::array<int, 3>, 4> events {};
+  static std::array<std::array<int, 4>, 4> events {};
   const std::array<NpStateCallbackA, 4> callbacks {
       RecordNpState<0>, RecordNpState<1>, RecordNpState<2>, RecordNpState<3>};
   int mode = 0;
@@ -2176,7 +2179,7 @@ void TestNpEmulation() {
       Check(NpRegisterStateCallbackA(callbacks[mode], &events[mode]) > 0 &&
                 NpCheckCallback() == OK && events[mode][0] == 1 &&
                 events[mode][1] == Config::GetUserId() &&
-                events[mode][2] == (emulate ? 2 : 1),
+                events[mode][2] == (emulate ? 2 : 1) && events[mode][3] == mode,
             "initial NP callback matches the selected emulated sign-in state");
       ++mode;
       for (int player = 0; player < Config::MAX_PLAYERS; ++player) {
